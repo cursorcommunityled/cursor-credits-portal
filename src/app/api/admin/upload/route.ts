@@ -101,18 +101,19 @@ async function handleCodesUpload(data: Array<{
       );
     }
 
-    // Add new codes to Firestore
-    const promises = newCodes.map(codeData => 
-      addDoc(collection(db, 'codes'), {
+    // Firestore rejects undefined field values — omit optional CSV columns
+    const promises = newCodes.map((codeData) => {
+      const record: Record<string, unknown> = {
         code: codeData.code,
         cursorUrl: codeData.cursorUrl,
-        creator: codeData.creator,
-        date: codeData.date,
         isRedeemed: false,
-        projectId: projectId,
-        createdAt: new Date()
-      })
-    );
+        projectId,
+        createdAt: new Date(),
+      };
+      if (codeData.creator) record.creator = codeData.creator;
+      if (codeData.date) record.date = codeData.date;
+      return addDoc(collection(db, 'codes'), record);
+    });
 
     await Promise.all(promises);
 
@@ -172,20 +173,22 @@ async function handleAttendeesUpload(data: Array<{
       );
     }
 
-    // Add new attendees to Firestore
-    const promises = newAttendees.map(attendee => 
-      addDoc(collection(db, 'attendees'), {
+    const promises = newAttendees.map((attendee) => {
+      const record: Record<string, unknown> = {
         name: attendee.name,
         email: attendee.email,
-        firstName: attendee.firstName,
-        lastName: attendee.lastName,
-        checkedInAt: attendee.checkedInAt,
-        approvalStatus: attendee.approvalStatus,
         hasRedeemedCode: false,
-        projectId: projectId,
-        createdAt: new Date()
-      })
-    );
+        projectId,
+        createdAt: new Date(),
+      };
+      if (attendee.firstName) record.firstName = attendee.firstName;
+      if (attendee.lastName) record.lastName = attendee.lastName;
+      if (attendee.checkedInAt) record.checkedInAt = attendee.checkedInAt;
+      if (attendee.approvalStatus) {
+        record.approvalStatus = attendee.approvalStatus;
+      }
+      return addDoc(collection(db, 'attendees'), record);
+    });
 
     await Promise.all(promises);
 
