@@ -19,16 +19,17 @@ export default function AdminPage() {
 
   // Check if already authenticated on mount
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('admin_authenticated') === 'true';
-    if (isAuthenticated) {
-      // Check if user has selected a project
-      const selectedProject = localStorage.getItem('admin_selected_project');
-      if (selectedProject) {
-        router.push('/admin/dashboard');
-      } else {
-        router.push('/admin/projects');
-      }
-    }
+    fetch('/api/admin/auth', { credentials: 'include' })
+      .then((res) => {
+        if (!res.ok) return;
+        const selectedProject = localStorage.getItem('admin_selected_project');
+        if (selectedProject) {
+          router.push('/admin/dashboard');
+        } else {
+          router.push('/admin/projects');
+        }
+      })
+      .catch(() => {});
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,7 +48,6 @@ export default function AdminPage() {
       const result = await response.json();
 
       if (result.success) {
-        localStorage.setItem('admin_authenticated', 'true');
         router.push('/admin/projects');
       } else {
         setError('Invalid password');

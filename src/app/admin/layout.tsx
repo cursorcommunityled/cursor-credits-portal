@@ -26,11 +26,11 @@ export default function AdminLayout({
   const pathname = usePathname();
 
   useEffect(() => {
-    const checkAuth = () => {
-      const authenticated = localStorage.getItem('admin_authenticated') === 'true';
+    const checkAuth = async () => {
+      const session = await fetch('/api/admin/auth', { credentials: 'include' });
+      const authenticated = session.ok;
       setIsAuthenticated(authenticated);
 
-      // Check for selected project
       const projectData = localStorage.getItem('admin_selected_project');
       if (projectData) {
         try {
@@ -57,7 +57,7 @@ export default function AdminLayout({
   }, [router, pathname]);
 
   const handleLogout = () => {
-    localStorage.removeItem('admin_authenticated');
+    void fetch('/api/admin/auth', { method: 'DELETE', credentials: 'include' });
     localStorage.removeItem('admin_selected_project');
     setIsAuthenticated(false);
     setSelectedProject(null);

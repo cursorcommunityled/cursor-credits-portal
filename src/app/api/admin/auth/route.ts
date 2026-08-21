@@ -1,41 +1,64 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import {
+  ADMIN_COOKIE,
+  adminCookieOptions,
+  createAdminSessionValue,
+  parseAdminSession,
+  passwordMatches,
+} from "@/lib/admin-auth";
+import { cookies } from "next/headers";
+import { getClientIp, rateLimit } from "@/lib/rate-limit";
 
-/**
- * API route for admin password authentication.
- * Validates password against ADMIN_PASSWORD environment variable.
- */
+export async function GET() {
+  const store = await cookies();
+  if (!parseAdminSession(store.get(ADMIN_COOKIE)?.value)) {
+    return NextResponse.json({ success: false }, { status: 401 });
+  }
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE() {
+  const store = await cookies();
+  store.set(ADMIN_COOKIE, "", { ...adminCookieOptions(), maxAge: 0 });
+  return NextResponse.json({ success: true });
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { password } = await request.json();
+    const ipLimit = rateLimit(`admin-auth:${getClientIp(request)}`, {
+      limit: 5,
+      windowMs: 15 * 60_000,
+    });
+    if (!ipLimit.ok) {
+      return NextResponse.json(
+        { success: false, error: "Too many attempts" },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } }
+      );
+    }
 
-    // Get admin password from environment
+    const { password } = await request.json();
     const adminPassword = process.env.ADMIN_PASSWORD;
 
     if (!adminPassword) {
-      console.error('ADMIN_PASSWORD not configured in environment');
       return NextResponse.json(
-        { success: false, error: 'Admin authentication not configured' },
+        { success: false, error: "Admin authentication not configured" },
         { status: 500 }
       );
     }
 
-    // Simple password comparison
-    const isValid = password === adminPassword;
-
-    if (isValid) {
-      return NextResponse.json({ success: true });
-    } else {
-      // Add small delay to prevent brute force attacks
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    if (!passwordMatches(password)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid password' },
+        { success: false, error: "Invalid password" },
         { status: 401 }
       );
     }
-  } catch (error) {
-    console.error('Admin auth error:', error);
+
+    const store = await cookies();
+    store.set(ADMIN_COOKIE, createAdminSessionValue(), adminCookieOptions());
+    return NextResponse.json({ success: true });
+  } catch {
     return NextResponse.json(
-      { success: false, error: 'Authentication failed' },
+      { success: false, error: "Authentication failed" },
       { status: 500 }
     );
   }

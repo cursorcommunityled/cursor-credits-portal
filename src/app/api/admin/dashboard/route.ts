@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
+import { requireAdminApi } from '@/lib/admin-auth';
 
 /**
  * API route that provides dashboard statistics and recent activity for a specific project
  */
 export async function GET(request: NextRequest) {
+  const denied = await requireAdminApi();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import { requireAdminApi } from '@/lib/admin-auth';
 
 /**
  * Public API route for fetching attendees during redemption flow
  * This is separate from the admin attendees API and handles the public redemption process
  */
 export async function GET(request: NextRequest) {
+  const denied = await requireAdminApi();
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(request.url);
     let projectId = searchParams.get('projectId');

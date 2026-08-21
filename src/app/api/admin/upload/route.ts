@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { parseCodesCSV, parseAttendeesCSV } from '@/lib/csv-parser';
+import { requireAdminApi } from '@/lib/admin-auth';
 
 /**
  * API route for uploading CSV files (codes and attendees)
  */
 export async function POST(request: NextRequest) {
+  const denied = await requireAdminApi();
+  if (denied) return denied;
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
