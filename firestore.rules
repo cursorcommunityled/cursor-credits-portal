@@ -1,26 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Temporary open rules for development
-    // TODO: Implement proper project-based security rules
+    // Client SDK is denied. Server Admin SDK bypasses these rules.
     match /{document=**} {
-      allow read, write: if true;
-    }
-    
-    // Projects collection (admin-only in future)
-    match /projects/{projectId} {
-      allow read, write: if true;
-    }
-    
-    // Project-scoped collections
-    match /codes/{codeId} {
-      allow read, write: if true;
-    }
-    match /attendees/{attendeeId} {
-      allow read, write: if true;
-    }
-    match /redemptions/{redemptionId} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
