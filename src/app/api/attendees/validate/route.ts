@@ -3,12 +3,23 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { AttendeeValidationStepSchema } from '@/features/attendees/model';
 import type { AttendeeValidationResponse } from '@/features/attendees/model';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 /**
  * API route for validating attendee information during redemption
  */
 export async function POST(request: NextRequest) {
   try {
+    const limited = rateLimit(`validate:${getClientIp(request)}`, {
+      limit: 30,
+      windowMs: 60_000,
+    });
+    if (!limited.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Too many attempts. Please wait.' },
+        { status: 429 }
+      );
+    }
     const body = await request.json();
     
     // Validate input data
