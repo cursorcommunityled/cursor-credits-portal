@@ -10,6 +10,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { CreateProjectSchema, generateProjectSlug } from '@/features/projects/model';
+import { requireAdminApi } from '@/lib/admin-auth';
 
 /**
  * GET /api/admin/projects
@@ -17,6 +18,8 @@ import { CreateProjectSchema, generateProjectSlug } from '@/features/projects/mo
  * Fetches all projects with their basic stats
  */
 export async function GET() {
+  const denied = await requireAdminApi();
+  if (denied) return denied;
   try {
     // Fetch projects
     const projectsRef = collection(db, 'projects');
@@ -71,6 +74,8 @@ export async function GET() {
  * Creates a new project
  */
 export async function POST(request: NextRequest) {
+  const denied = await requireAdminApi();
+  if (denied) return denied;
   try {
     const body = await request.json();
     

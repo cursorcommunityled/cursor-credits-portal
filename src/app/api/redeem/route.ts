@@ -6,10 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { collection, query, where, getDocs, addDoc, runTransaction, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, runTransaction, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { AttendeeRedemptionSchema } from '@/features/attendees/model';
 import type { ApiResponse } from '@/lib/types';
+import { getClientIp, rateLimit } from '@/lib/rate-limit';
 
 /**
  * POST /api/redeem
@@ -19,6 +20,17 @@ import type { ApiResponse } from '@/lib/types';
  */
 export async function POST(request: NextRequest) {
   try {
+    const limited = rateLimit(`redeem:${getClientIp(request)}`, {
+      limit: 10,
+      windowMs: 60_000,
+    });
+    if (!limited.ok) {
+      return NextResponse.json(
+        { success: false, error: 'Too many redemption attempts. Please wait.' },
+        { status: 429, headers: { 'Retry-After': String(limited.retryAfterSeconds) } }
+      );
+    }
+
     const body = await request.json();
     
     // Validate input data
@@ -146,21 +158,30 @@ export async function POST(request: NextRequest) {
     
     // Use transaction to ensure atomicity
     const result = await runTransaction(db, async (transaction) => {
-      // Mark code as redeemed
-      transaction.update(doc(db, 'codes', codeDoc.id), {
+      const codeRef = doc(db, 'codes', codeDoc.id);
+      const attendeeRef = doc(db, 'attendees', attendeeDoc.id);
+      const freshCode = await transaction.get(codeRef);
+      const freshAttendee = await transaction.get(attendeeRef);
+      if (!freshCode.exists() || freshCode.data()?.isRedeemed) {
+        throw new Error('That code is no longer available. Please retry.');
+      }
+      if (!freshAttendee.exists() || freshAttendee.data()?.hasRedeemedCode) {
+        throw new Error('You have already redeemed a code. Each attendee can only redeem one code.');
+      }
+      const liveCode = freshCode.data() ?? codeData;
+
+      transaction.update(codeRef, {
         isRedeemed: true,
         redeemedBy: attendeeDoc.id,
         redeemedAt: new Date(),
       });
       
-      // Update attendee record to mark as redeemed (CRITICAL: prevents double redemption)
-      transaction.update(doc(db, 'attendees', attendeeDoc.id), {
+      transaction.update(attendeeRef, {
         hasRedeemedCode: true,
         redeemedCodeId: codeDoc.id,
         redeemedAt: new Date(),
       });
       
-      // Create redemption record (must use transaction.set inside transaction)
       const redemptionRef = doc(collection(db, 'redemptions'));
       const redemptionData = {
         projectId: projectId,
@@ -168,10 +189,10 @@ export async function POST(request: NextRequest) {
         attendeeEmail: validatedData.email.toLowerCase().trim(),
         attendeeId: attendeeDoc.id,
         codeId: codeDoc.id,
-        codeValue: codeData.code,
-        codeUrl: codeData.cursorUrl,
+        codeValue: liveCode.code,
+        codeUrl: liveCode.cursorUrl,
         redeemedAt: new Date(),
-        timestamp: new Date(), // Keep for backward compatibility
+        timestamp: new Date(),
         ipAddress: request.headers.get('x-forwarded-for') || 
                    request.headers.get('x-real-ip') || 
                    'unknown',
@@ -181,8 +202,8 @@ export async function POST(request: NextRequest) {
       transaction.set(redemptionRef, redemptionData);
       
       return {
-        code: codeData.code,
-        cursorUrl: codeData.cursorUrl,
+        code: liveCode.code,
+        cursorUrl: liveCode.cursorUrl,
         attendeeId: attendeeDoc.id,
         redemptionId: redemptionRef.id,
       };
