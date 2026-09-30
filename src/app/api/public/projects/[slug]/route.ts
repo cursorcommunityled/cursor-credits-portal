@@ -6,7 +6,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
  * Public API route for fetching project information by slug
  * Used by public redemption pages
  */
-export async function GET(request: NextRequest, { params }: { params: { slug: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
 
